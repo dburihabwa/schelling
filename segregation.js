@@ -1,14 +1,36 @@
+//Interval id of the function that makes the engine tick and updates the display
 var intervalId;
+//Context canvas kept global for better performance
+var context;
+var GLOBAL = {
+	//Size of each cell drawn in the canvas
+	cellSize: 5
+};
 
+/**
+ * Abstract agent.
+ * @param {integer} x - Position in x dimension
+ * @param {integer} y - Position in y dimension
+ */
 function Agent(x, y) {
 	this.x = x;
 	this.y = y;
 }
 
+/**
+ * Updates the state of the agent. Must be implemented by all objects subtyping Agent.
+ * @param {Engine} engine - The engine that is running the simulation
+ */
 Agent.prototype.update = function (engine) {
 	throw new Error('Abstract method must be implemented by subtype!');
 };
 
+/**
+ * Specialization of Agent that moves if it is not pleased with its neighbourhood.
+ * @param {integer} x - Position in x dimension
+ * @param {integer} y - Position in y dimension
+ * @param {string} color - Color of the individual
+ */
 function Individual(x, y, color) {
 	Agent.call(this, x, y);
 	this.color = color;
@@ -17,19 +39,23 @@ function Individual(x, y, color) {
 Individual.prototype = Object.create(Agent.prototype);
 Individual.prototype.constructor = Individual;
 
+/**
+ * Updates the position of the Individual by moving it if its satisfaction level is below the preference specified by the engine.
+ * @param {Engine} engine - The engine that is running the simulation
+ * @return {integer} - The level of satisfaction of the Individual
+ */
 Individual.prototype.update = function (engine) {
 	if (!(engine instanceof Engine)) {
 		throw new Error('engine must be of type Engine!');
 	}
 	var surroundings = getSurroundings(engine.grid, this.x, this.y);
 	var color = this.color + 's';
-	var denominator = surroundings.greens.length + surroundings.reds.length;
+	var denominator = 8 - surroundings.free.length;
 	if (denominator === 0) {
 		denominator = 1;
 	}
 	var agentSatisfaction = (surroundings[color].length / denominator * 100);
 	if (agentSatisfaction < engine.preference && surroundings.free.length > 0) {
-		console.log('individual (' + this.x + ', ' + this.y + ') wants to move out');
 		var random = Math.floor(Math.random() * surroundings.free.length);
 		var newCoords = surroundings.free[random];
 		engine.grid[newCoords.x][newCoords.y] = this;
@@ -39,7 +65,17 @@ Individual.prototype.update = function (engine) {
 	}
 	return agentSatisfaction;
 };
-
+/**
+ * An engine that simulates a loosely interpreted schelling model.
+ * The constructor creates a grid, sets the level of preference,
+ * instantiates the individuals with the right colors and randomly
+ * places them on the grid.
+ * @param {integer} width - The width of the grid
+ * @param {integer} height - The height of the grid
+ * @param {integer} preference - The level of preference
+ * @param {integer} greens - The number of green individuals
+ * @param {integer} reds - The number of red individuals
+ */
 function Engine(width, height, preference, greens, reds) {
 	if (typeof width !== 'number' || width <= 0) {
 		throw new Error('width must be a number greater than 0');
@@ -67,6 +103,7 @@ function Engine(width, height, preference, greens, reds) {
 	this.reds = reds;
 	this.satisfaction = 0;
 	this.satisfactionSurvey = [];
+	this.agents = [];
 	
 	this.grid = [];
 	for (var i = 0; i < width; i++) {
@@ -79,14 +116,20 @@ function Engine(width, height, preference, greens, reds) {
 	this.place();
 }
 
+/**
+ * Creates the individuals according to the number given in the constructor
+ * and places them on the grid.
+ */
 Engine.prototype.place = function () {
 	var i = 0, x, y;
+	this.agents = [];
 	while (i < this.greens) {
 		while (true) {
 			x = Math.floor(Math.random() * this.width);
 			y = Math.floor(Math.random() * this.height);
 			if (!this.grid[x][y]) {
 				this.grid[x][y] = new Individual(x, y, 'green');
+				this.agents.push(this.grid[x][y]);
 				i++;
 				break;
 			}
@@ -99,6 +142,7 @@ Engine.prototype.place = function () {
 			y = Math.floor(Math.random() * this.height);
 			if (!this.grid[x][y]) {
 				this.grid[x][y] = new Individual(x, y, 'red');
+				this.agents.push(this.grid[x][y]);
 				i++;
 				break;
 			}
@@ -106,28 +150,22 @@ Engine.prototype.place = function () {
 	}
 };
 
+/**
+ * Simulates a turn of the simulation by updating every individual once in a random order.
+ */
 Engine.prototype.tick = function () {
 	this.satisfaction = 0;
-	var individuals = 0;
-	var agents = [];
-	for (var i = 0; i < this.width; i++) {
-		for (var j = 0; j < this.height; j++) {
-			var agent = this.grid[i][j];
-			if (!agent) {
-				continue;
-			}
-			agents.push(agent);
-		}
-	}
 	//TODO: Shuffle the list of players
-	individuals = agents.length;
-	while (agents.length > 0) {
-		var agent = agents.pop();
+	this.agents = shuffle(this.agents);
+	var i = this.agents.length - 1;
+	while (i >= 0) {
+		var agent = this.agents[i];
 		var agentSatisfaction = agent.update(this);
 		this.satisfaction += agentSatisfaction;
+		i--;
 	}
-	if (individuals !== 0) {
-		this.satisfaction = Math.round(this.satisfaction / individuals);		
+	if (this.agents.length !== 0) {
+		this.satisfaction = Math.round(this.satisfaction / this.agents.length);
 	} else {
 		this.satisfaction = 0;
 	}
@@ -135,43 +173,53 @@ Engine.prototype.tick = function () {
 	if (this.satisfaction >= this.preference) {
 		clearInterval(intervalId);
 		console.log('Out after ' + this.satisfactionSurvey.length + ' turns');
+		console.log('Average satisfaction : ' + this.satisfaction);
 	}
-	console.log('Preference : ' + this.preference);
 };
 
+/**
+ * Draws a representation of the grid in a HTML <canvas> element.
+ * In order to draw the result, the page on which the code is executed
+ * must contain a <div> with an id set to 'simulation'.
+ */
 Engine.prototype.draw = function () {
-	var land = document.getElementById('land');
+	var land = document.getElementById('surface');
 	if (!land) {
-		land = document.createElement('table');
-		land.id = 'land';
-		for (var i = 0; i < this.width; i++) {
-			var row = document.createElement('tr');
-			for (var j = 0; j < this.height; j++) {
-				var cell = document.createElement('td');
-				cell.id = i + 'x' + j;
-				row.appendChild(cell);
-			}
-			land.appendChild(row);
-		}
+		var land = document.createElement('canvas');
+		land.width = GLOBAL.cellSize * this.width;
+		land.height = GLOBAL.cellSize * this.height;
+		context = land.getContext('2d');
+		land.id = 'surface';
 		document.getElementById('simulation').appendChild(land);
 	}
 
+	context.fillStyle = '#FFFFFF';
+	context.fillRect(0, 0, land.width, land.height);
+	var lastColor;
+
 	for (var i = 0; i < this.width; i++) {
+		var column = i * GLOBAL.cellSize;
 		for (var j = 0; j < this.height; j++) {
-			var cell = document.getElementById(i + 'x' + j);
-			if (!this.grid[i][j]) {
-				cell.className = 'void';
-			} else if (this.grid[i][j].color) {
-				var color = this.grid[i][j].color;
-				cell.className = color;
-			} else {
-				cell.className = '';
-				console.error('could not associate any type with cell(' + i + ', ' + j + ')');
+			if (!this.grid[i][j] || !this.grid[i][j].color) {
+				continue;
 			}
+			if (lastColor !== this.grid[i][j].color) {
+				context.fillStyle = this.grid[i][j].color;
+				lastColor = this.grid[i][j].color;
+			}
+			context.fillRect(column, j * GLOBAL.cellSize, GLOBAL.cellSize, GLOBAL.cellSize);
 		}
 	}
 };
 
+/**
+ * Returns an object containing the cells surronunding the cell at position (i, j).
+ * The cells are classified according to their colour
+ * @param {Array[Array]} - Two-dimensional array
+ * @param {integer} i - Position in the first dimension
+ * @param {integer} j - Position in the second dimension
+ * @return {Object} - An object describing of the surroundings of cell (i, j)
+ */
 function getSurroundings(grid, i, j) {
 	var surroundings = {
 		'reds': [],
@@ -192,6 +240,9 @@ function getSurroundings(grid, i, j) {
 			} else if (y >= grid[0].length) {
 				y = 0;
 			}
+			if (i === x && j === y) {
+				continue;
+			}
 			var cell = {'x': x, 'y': y};
 			if (!grid[x][y]) {
 				surroundings.free.push(cell);				
@@ -205,23 +256,22 @@ function getSurroundings(grid, i, j) {
 	return surroundings;
 }
 
+/**
+ * Shuffles an array.
+ * @param {Array} o - An array
+ * @return The shuffled array
+ */
+function shuffle(o) {
+    for(var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+    return o;
+};
 
 window.onload = function () {
-	var populations = [
-		{
-			'name': 'red',
-			'population': 100,
-		},
-		{
-			'name': 'green',
-			'population': 100,
-		}
-	];
-	var engine = new Engine(100, 100, 74, 4000, 4000);
+	var engine = new Engine(100, 100, 75, 2800, 2800);
 	document.getElementById('startButton').onclick = function () {
 		intervalId = setInterval(function () {
 			engine.draw();
 			engine.tick();
-		}, 50);
+		}, 20);
 	};
 };
