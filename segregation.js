@@ -174,6 +174,7 @@ Engine.prototype.tick = function () {
 		clearInterval(intervalId);
 		console.log('Out after ' + this.satisfactionSurvey.length + ' turns');
 		console.log('Average satisfaction : ' + this.satisfaction);
+		this.plot();
 	}
 };
 
@@ -210,6 +211,45 @@ Engine.prototype.draw = function () {
 			context.fillRect(column, j * GLOBAL.cellSize, GLOBAL.cellSize, GLOBAL.cellSize);
 		}
 	}
+};
+
+Engine.prototype.plot = function () {
+	var categories = [];
+	for (var i = 0; i < this.satisfactionSurvey.length; i++) {
+		categories.push(i + 1);
+	}
+	var data = this.satisfactionSurvey;
+	$('#plot').highcharts({
+        title: {
+            text: 'Average satisfaction level',
+        },
+        xAxis: {
+            categories: categories
+        },
+        yAxis: {
+            title: {
+                text: '% of average satisfaction'
+            },
+            plotLines: [{
+                value: 0,
+                width: 1,
+                color: '#808080'
+            }]
+        },
+        tooltip: {
+            valueSuffix: '%'
+        },
+        legend: {
+            layout: 'vertical',
+            align: 'right',
+            verticalAlign: 'middle',
+            borderWidth: 0
+        },
+        series: [{
+            name: 'satisfaction',
+            data: data
+        }]
+    });
 };
 
 /**
