@@ -49,12 +49,12 @@ Individual.prototype.update = function (engine) {
 		throw new Error('engine must be of type Engine!');
 	}
 	var surroundings = getSurroundings(engine.grid, this.x, this.y);
-	var color = this.color + 's';
 	var denominator = 8 - surroundings.free.length;
 	if (denominator === 0) {
 		denominator = 1;
 	}
-	var agentSatisfaction = (surroundings[color].length / denominator * 100);
+	var similarIndividuals = surroundings[this.color] ? surroundings[this.color].length : 0;
+	var agentSatisfaction = similarIndividuals / denominator * 100;
 	if (agentSatisfaction < engine.preference && surroundings.free.length > 0) {
 		var random = Math.floor(Math.random() * surroundings.free.length);
 		var newCoords = surroundings.free[random];
@@ -76,7 +76,7 @@ Individual.prototype.update = function (engine) {
  * @param {integer} greens - The number of green individuals
  * @param {integer} reds - The number of red individuals
  */
-function Engine(width, height, preference, greens, reds) {
+function Engine(width, height, preference, population) {
 	if (typeof width !== 'number' || width <= 0) {
 		throw new Error('width must be a number greater than 0');
 	}
@@ -86,24 +86,28 @@ function Engine(width, height, preference, greens, reds) {
 	if (typeof preference !== 'number' || preference < 0 || preference > 100) {
 		throw new Error('preference must be a number between 0 and 100!');
 	}
-	if (typeof greens !== 'number' || greens < 0) {
-		throw new Error('greens must be a number greater or equal to 0');
+	if (!(population instanceof Array) || population.length < 2) {
+		throw new Error('population must be an array describing at least two populations!');
 	}
-	if (typeof reds !== 'number' || reds < 0) {
-		throw new Error('reds must be a number greater or equal to 0');
+	var totalPopulation = 0;
+	for (var i = 0; i < population; i++) {
+		if (!population[i].hasOwnProperty(color) || !population[i].hasOwnProperty(size)) {
+			throw new Error('A population of individuals was not matching the expected format : ' + JSON.stringify(population[i]));
+		}
+		totalPopulation += population.size;
 	}
-	if ((this.width * this.height) < (greens + reds)) {
+	if ((this.width * this.height) < totalPopulation) {
 		throw new Error('The number of individuals is larger than the amount of space available!');
 	}
 	
 	this.width = width;
 	this.height = height;
 	this.preference = preference;
-	this.greens = greens;
-	this.reds = reds;
+	this.population = population;
 	this.satisfaction = 0;
 	this.satisfactionSurvey = [];
 	this.agents = [];
+
 	
 	this.grid = [];
 	for (var i = 0; i < width; i++) {
@@ -121,30 +125,20 @@ function Engine(width, height, preference, greens, reds) {
  * and places them on the grid.
  */
 Engine.prototype.place = function () {
-	var i = 0, x, y;
 	this.agents = [];
-	while (i < this.greens) {
-		while (true) {
-			x = Math.floor(Math.random() * this.width);
-			y = Math.floor(Math.random() * this.height);
-			if (!this.grid[x][y]) {
-				this.grid[x][y] = new Individual(x, y, 'green');
-				this.agents.push(this.grid[x][y]);
-				i++;
-				break;
-			}
-		}
-	}
-	i = 0;
-	while (i < this.reds) {
-		while (true) {
-			x = Math.floor(Math.random() * this.width);
-			y = Math.floor(Math.random() * this.height);
-			if (!this.grid[x][y]) {
-				this.grid[x][y] = new Individual(x, y, 'red');
-				this.agents.push(this.grid[x][y]);
-				i++;
-				break;
+	for (var j = 0; j < this.population.length; j++) {
+		var pop = this.population[j];
+		var i = 0, x, y;
+		while (i < pop.size) {
+			while (true) {
+				x = Math.floor(Math.random() * this.width);
+				y = Math.floor(Math.random() * this.height);
+				if (!this.grid[x][y]) {
+					this.grid[x][y] = new Individual(x, y, pop.color);
+					this.agents.push(this.grid[x][y]);
+					i++;
+					break;
+				}
 			}
 		}
 	}
@@ -262,8 +256,6 @@ Engine.prototype.plot = function () {
  */
 function getSurroundings(grid, i, j) {
 	var surroundings = {
-		'reds': [],
-		'greens': [],
 		'free': []
 	};
 	for (var k = -1; k <= 1; k++) {
@@ -284,12 +276,14 @@ function getSurroundings(grid, i, j) {
 				continue;
 			}
 			var cell = {'x': x, 'y': y};
-			if (!grid[x][y]) {
-				surroundings.free.push(cell);				
-			} else if (grid[x][y].color === 'red') {
-				surroundings.reds.push(cell);
-			} else if (grid[x][y].color === 'green') {
-				surroundings.greens.push(cell);
+			if (grid[x][y] && grid[x][y].hasOwnProperty('color')) {
+				var color = grid[x][y].color;
+				if(!surroundings.hasOwnProperty(color)) {
+					surroundings[color] = [];
+				}
+				surroundings[color].push(cell);
+			} else {
+				surroundings.free.push(cell);
 			}
 		}
 	}
@@ -307,7 +301,22 @@ function shuffle(o) {
 };
 
 window.onload = function () {
-	var engine = new Engine(100, 100, 75, 2800, 2800);
+	var population = [
+		{
+			'color': 'green',
+			'size': 1100
+		},
+		{
+			'color': 'red',
+			'size': 1000
+		},
+
+		{
+			'color': 'blue',
+			'size': 800
+		}
+	];
+	var engine = new Engine(100, 100, 75, population);
 	document.getElementById('startButton').onclick = function () {
 		intervalId = setInterval(function () {
 			engine.draw();
