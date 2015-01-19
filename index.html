@@ -9,7 +9,7 @@
 </head>
 <body>
 	<h1>Schelling's segregation model</h1>
-	<form id = "settings">
+	<form id = "settings" method = "POST">
 		<fieldset>
 			<legend>Dimensions</legend>
 			<label for = "x">X</label>
@@ -23,17 +23,18 @@
 			<br/>
 			<input id = "iterations" name = "iterations" type = "number" min = "1" value = "1000" required/>
 			<br/>
-			<label for = "preference">Preference</label>
-			<br/>
-			<input id = "preference" name = "preference" type = "number" min = "0" max = "100" value = "70" required/>
 		</fieldset>
 		<fieldset>
 			<legend>Population</legend>
 			<input id = "green.color" class = "population" type = "color"  value = "#008000" readonly required/>
 			<input id = "green.size" class = "population" name = "green" type = "number" min = "1" value = "4000" required/>
+			<input id = "green.preference" class = "population" type = "range" min = "1" max = "100" step = "1" required/>
+			<output id = "green.output"></output>
 			<br/>
 			<input id = "red.color" class = "population" type = "color" value = "#FF0000" readonly required/>
 			<input id = "red.size" class = "population" name = "red" type = "number" min = "1" value = "4000" required/>
+			<input id = "red.preference" class = "population" type = "range" min = "1" max = "100" step = "1" required/>
+			<output id = "red.output"></output>
 			<br/>
 		</fieldset>
 		<input type = "submit" value = "Submit"/>

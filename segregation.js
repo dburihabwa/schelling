@@ -62,15 +62,13 @@ Individual.prototype.update = function (engine) {
 		}
 		satisfaction = Math.round(similarIndividuals / individuals * 100);
 	}
-	if (satisfaction < engine.preference && surroundings.free.length > 0) {
+	if (satisfaction < engine.preferences[this.color] && surroundings.free.length > 0) {
 		var random = Math.floor(Math.random() * surroundings.free.length);
 		var newCoords = surroundings.free[random];
 		engine.grid[newCoords.x][newCoords.y] = this;
 		engine.grid[this.x][this.y] = null; 
 		this.x = newCoords.x;
 		this.y = newCoords.y;
-	} else {
-		'0';
 	}
 	return satisfaction;
 };
@@ -85,25 +83,26 @@ Individual.prototype.update = function (engine) {
  * @param {integer} greens - The number of green individuals
  * @param {integer} reds - The number of red individuals
  */
-function Engine(width, height, preference, population, iterations) {
+function Engine(width, height, population, iterations) {
 	if (typeof width !== 'number' || width <= 0) {
 		throw new Error('width must be a number greater than 0');
 	}
 	if (typeof height !== 'number' || height <= 0) {
 		throw new Error('height must be a number greater than 0');
 	}
-	if (typeof preference !== 'number' || preference < 0 || preference > 100) {
-		throw new Error('preference must be a number between 0 and 100!');
-	}
-	if (!(population instanceof Array) || population.length < 2) {
+	if (typeof population !== 'object' || Object.keys(population) < 2) {
 		throw new Error('population must be an array describing at least two populations!');
 	}
 	var totalPopulation = 0;
-	for (var i = 0; i < population; i++) {
-		if (!population[i].hasOwnProperty(color) || !population[i].hasOwnProperty(size)) {
-			throw new Error('A population of individuals was not matching the expected format : ' + JSON.stringify(population[i]));
+	for (var pop in population) {
+		if (population.hasOwnProperty(pop)) {
+			if (!population[pop].hasOwnProperty('color') ||
+				!population[pop].hasOwnProperty('size')  ||
+				!population[pop].hasOwnProperty('preference')) {
+				throw new Error('A population of individuals was not matching the expected format : ' + JSON.stringify(population[i]));
+			}
+			totalPopulation += population[pop].size;
 		}
-		totalPopulation += population.size;
 	}
 	if ((this.width * this.height) < totalPopulation) {
 		throw new Error('The number of individuals is larger than the amount of space available!');
@@ -111,14 +110,24 @@ function Engine(width, height, preference, population, iterations) {
 	if (typeof iterations !== 'number' || iterations < 0) {
 		throw new Error('The number of iterations must be a number greater than 0!');
 	}
+	this.turns++;
 	this.iterations = iterations;
 	this.width = width;
 	this.height = height;
-	this.preference = preference;
-	this.population = population;
-	this.satisfaction = 0;
-	this.satisfactionSurvey = [];
+	this.population = {};
+	this.satisfaction = {};
+	this.satisfactionSurvey = {};
 	this.agents = [];
+	this.preferences = {};
+	for (var p in population) {
+		if (population.hasOwnProperty(p)) {
+			var pop = population[p];
+			this.population[pop.color] = population[p];
+			this.preferences[pop.color] = parseInt(population[p].preference, 10);
+			this.satisfaction[pop.color] = 0;
+			this.satisfactionSurvey[pop.color] = [];
+		}
+	}
 	
 	this.grid = [];
 	for (var i = 0; i < width; i++) {
@@ -137,18 +146,20 @@ function Engine(width, height, preference, population, iterations) {
  */
 Engine.prototype.place = function () {
 	this.agents = [];
-	for (var j = 0; j < this.population.length; j++) {
-		var pop = this.population[j];
-		var i = 0, x, y;
-		while (i < pop.size) {
-			while (true) {
-				x = Math.floor(Math.random() * this.width);
-				y = Math.floor(Math.random() * this.height);
-				if (!this.grid[x][y]) {
-					this.grid[x][y] = new Individual(x, y, pop.color);
-					this.agents.push(this.grid[x][y]);
-					i++;
-					break;
+	for (var p in this.population) {
+		if (this.population.hasOwnProperty(p)) {
+			var pop = this.population[p];
+			var i = 0, x, y;
+			while (i < pop.size) {
+				while (true) {
+					x = Math.floor(Math.random() * this.width);
+					y = Math.floor(Math.random() * this.height);
+					if (!this.grid[x][y]) {
+						this.grid[x][y] = new Individual(x, y, pop.color);
+						this.agents.push(this.grid[x][y]);
+						i++;
+						break;
+					}
 				}
 			}
 		}
@@ -159,23 +170,23 @@ Engine.prototype.place = function () {
  * Simulates a turn of the simulation by updating every individual once in a random order.
  */
 Engine.prototype.tick = function () {
-	this.satisfaction = 0;
-	//TODO: Shuffle the list of players
+	this.turns++;
 	this.agents = shuffle(this.agents);
 	var i = this.agents.length - 1;
 	while (i >= 0) {
 		var agent = this.agents[i];
 		var agentSatisfaction = agent.update(this);
-		this.satisfaction += agentSatisfaction;
+		this.satisfaction[agent.color] += agentSatisfaction;
 		i--;
 	}
-	if (this.agents.length !== 0) {
-		this.satisfaction = Math.round(this.satisfaction / this.agents.length);
-	} else {
-		this.satisfaction = 0;
+	for (var color in this.satisfaction) {
+		if (this.satisfaction.hasOwnProperty(color)) {
+			var colorSatisfactionAverage = Math.round(this.satisfaction[color] / this.population[color].size);
+			this.satisfaction[color] = 0;
+			this.satisfactionSurvey[color].push(colorSatisfactionAverage);
+		}
 	}
-	this.satisfactionSurvey.push([this.satisfactionSurvey.length, this.satisfaction]);
-	if (this.satisfactionSurvey.length === this.iterations) {
+	if ((this.turns % this.iterations) === 0) {
 		clearInterval(intervalId);
 		console.log('Out after ' + this.satisfactionSurvey.length + ' turns');
 		console.log('Average satisfaction : ' + this.satisfaction);
@@ -219,11 +230,18 @@ Engine.prototype.draw = function () {
 };
 
 Engine.prototype.plot = function () {
+	var series = [];
+	var length = 0;
+	for (var color in this.satisfactionSurvey) {
+		if (this.satisfactionSurvey.hasOwnProperty(color)) {
+			length = this.satisfactionSurvey[color].length;
+			series.push({name: color, data: this.satisfactionSurvey[color]});
+		}
+	}
 	var categories = [];
-	for (var i = 0; i < this.satisfactionSurvey.length; i++) {
+	for (var i = 0; i < length; i++) {
 		categories.push(i + 1);
 	}
-	var data = this.satisfactionSurvey;
 	$('#plot').highcharts({
         title: {
             text: 'Average satisfaction level',
@@ -250,10 +268,7 @@ Engine.prototype.plot = function () {
             verticalAlign: 'middle',
             borderWidth: 0
         },
-        series: [{
-            name: 'satisfaction',
-            data: data
-        }]
+        'series': series
     });
 };
 
@@ -309,7 +324,12 @@ function getSurroundings(grid, i, j) {
 function shuffle(o) {
     for(var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
     return o;
-};
+}
+
+function updateRange() {
+	var id = this.id.split('.')[0] + '.output';
+	document.getElementById(id).value = this.value + '%';
+}
 
 window.onload = function () {
 	var settingsForm = document.getElementById('settings');
@@ -317,7 +337,6 @@ window.onload = function () {
 		var x = parseInt(document.getElementById('x').value, 10);
 		var y = parseInt(document.getElementById('y').value, 10);
 		var iterations = parseInt(document.getElementById('iterations').value, 10);
-		var preference = parseInt(document.getElementById('preference').value, 10);
 		var demography = document.getElementsByClassName('population');
 		var pop = {};
 		for (var i = 0; i < demography.length; i++) {
@@ -332,14 +351,7 @@ window.onload = function () {
 			var value = element.value;
 			pop[group][property] = value;
 		}
-		var population = [];
-		for (var group in pop) {
-			if (pop.hasOwnProperty(group)) {
-				population.push(pop[group]);
-			}
-
-		}
-		var engine = new Engine(x, y, preference, population, iterations);
+		var engine = new Engine(x, y, pop, iterations);
 		var startButton = document.getElementById('startButton');
 		startButton.onclick = function () {
 			if (intervalId) {
@@ -354,4 +366,10 @@ window.onload = function () {
 		startButton.hidden = false;
 		return false;
 	};
+	var redPreference = document.getElementById('red.preference');
+	redPreference.onchange = updateRange;
+	redPreference.onchange();
+	var greenPreference = document.getElementById('green.preference');
+	greenPreference.onchange = updateRange;
+	greenPreference.onchange();
 };
