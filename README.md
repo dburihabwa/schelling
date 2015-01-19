@@ -1,3 +1,3 @@
-# Segregation
+# schelling
 
-Multi-agent simulation of [Schelling's segregation model].
+A loosely interpreted version of Schelling's segregation model.

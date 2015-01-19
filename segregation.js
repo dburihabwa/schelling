@@ -76,7 +76,7 @@ Individual.prototype.update = function (engine) {
  * @param {integer} greens - The number of green individuals
  * @param {integer} reds - The number of red individuals
  */
-function Engine(width, height, preference, population) {
+function Engine(width, height, preference, population, iterations) {
 	if (typeof width !== 'number' || width <= 0) {
 		throw new Error('width must be a number greater than 0');
 	}
@@ -99,7 +99,10 @@ function Engine(width, height, preference, population) {
 	if ((this.width * this.height) < totalPopulation) {
 		throw new Error('The number of individuals is larger than the amount of space available!');
 	}
-	
+	if (typeof iterations !== 'number' || iterations < 0) {
+		throw new Error('The number of iterations must be a number greater than 0!');
+	}
+	this.iterations = iterations;
 	this.width = width;
 	this.height = height;
 	this.preference = preference;
@@ -107,7 +110,6 @@ function Engine(width, height, preference, population) {
 	this.satisfaction = 0;
 	this.satisfactionSurvey = [];
 	this.agents = [];
-
 	
 	this.grid = [];
 	for (var i = 0; i < width; i++) {
@@ -164,7 +166,7 @@ Engine.prototype.tick = function () {
 		this.satisfaction = 0;
 	}
 	this.satisfactionSurvey.push([this.satisfactionSurvey.length, this.satisfaction]);
-	if (this.satisfaction >= this.preference) {
+	if (this.satisfactionSurvey.length === this.iterations) {
 		clearInterval(intervalId);
 		console.log('Out after ' + this.satisfactionSurvey.length + ' turns');
 		console.log('Average satisfaction : ' + this.satisfaction);
@@ -301,26 +303,46 @@ function shuffle(o) {
 };
 
 window.onload = function () {
-	var population = [
-		{
-			'color': 'green',
-			'size': 1100
-		},
-		{
-			'color': 'red',
-			'size': 1000
-		},
-
-		{
-			'color': 'blue',
-			'size': 800
+	var settingsForm = document.getElementById('settings');
+	settingsForm.onsubmit = function () {
+		var x = parseInt(document.getElementById('x').value, 10);
+		var y = parseInt(document.getElementById('y').value, 10);
+		var iterations = parseInt(document.getElementById('iterations').value, 10);
+		var preference = parseInt(document.getElementById('preference').value, 10);
+		var demography = document.getElementsByClassName('population');
+		var pop = {};
+		for (var i = 0; i < demography.length; i++) {
+			var element = demography[i];
+			var id = element.id;
+			var tokens = id.split('.');
+			var group = tokens[0];
+			var property = tokens[1];
+			if (!pop.hasOwnProperty(group)) {
+				pop[group] = {};
+			}
+			var value = element.value;
+			pop[group][property] = value;
 		}
-	];
-	var engine = new Engine(100, 100, 75, population);
-	document.getElementById('startButton').onclick = function () {
-		intervalId = setInterval(function () {
-			engine.draw();
-			engine.tick();
-		}, 20);
+		var population = [];
+		for (var group in pop) {
+			if (pop.hasOwnProperty(group)) {
+				population.push(pop[group]);
+			}
+
+		}
+		var engine = new Engine(x, y, preference, population, iterations);
+		var startButton = document.getElementById('startButton');
+		startButton.onclick = function () {
+			if (intervalId) {
+				clearInterval(intervalId);
+			}
+			intervalId = setInterval(function () {
+				engine.draw();
+				engine.tick();
+			}, 20);
+			return false;
+		};
+		startButton.hidden = false;
+		return false;
 	};
 };

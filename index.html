@@ -9,7 +9,36 @@
 </head>
 <body>
 	<h1>Schelling's segregation model</h1>
-	<button id = "startButton">Start</button>
+	<form id = "settings">
+		<fieldset>
+			<legend>Dimensions</legend>
+			<label for = "x">X</label>
+			<input id = "x" name = "x" type = "number" min = "1" value = "100" required/>
+			<label for = "y">Y</label>
+			<input id = "y" name = "y" type = "number" min = "1" value = "100" required/>
+		</fieldset>
+		<fieldset>
+			<legend>Simulation</legend>
+			<label for = "iterations">Iterations</label>
+			<br/>
+			<input id = "iterations" name = "iterations" type = "number" min = "1" value = "1000" required/>
+			<br/>
+			<label for = "preference">Preference</label>
+			<br/>
+			<input id = "preference" name = "preference" type = "number" min = "0" max = "100" value = "70" required/>
+		</fieldset>
+		<fieldset>
+			<legend>Population</legend>
+			<input id = "green.color" class = "population" type = "color"  value = "#008000" readonly required/>
+			<input id = "green.size" class = "population" name = "green" type = "number" min = "1" value = "4000" required/>
+			<br/>
+			<input id = "red.color" class = "population" type = "color" value = "#FF0000" readonly required/>
+			<input id = "red.size" class = "population" name = "red" type = "number" min = "1" value = "4000" required/>
+			<br/>
+		</fieldset>
+		<input type = "submit" value = "Submit"/>
+	</form>
+	<button id = "startButton" hidden = "true">Start</button>
 	<div id = "simulation"></div>
 	<div id = "plot"></div>
 	<script type="text/javascript" src = "segregation.js"></script>
