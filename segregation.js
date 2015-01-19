@@ -8,32 +8,13 @@ var GLOBAL = {
 };
 
 /**
- * Abstract agent.
- * @param {integer} x - Position in x dimension
- * @param {integer} y - Position in y dimension
- */
-function Agent(x, y) {
-	this.x = x;
-	this.y = y;
-}
-
-/**
- * Updates the state of the agent. Must be implemented by all objects subtyping Agent.
- * @param {Engine} engine - The engine that is running the simulation
- */
-Agent.prototype.update = function (engine) {
-	throw new Error('Abstract method must be implemented by subtype!');
-};
-
-/**
  * Specialization of Agent that moves if it is not pleased with its neighbourhood.
  * @param {integer} x - Position in x dimension
  * @param {integer} y - Position in y dimension
  * @param {string} color - Color of the individual
  */
 function Individual(x, y, color) {
-	Agent.call(this, x, y);
-	this.color = color;
+	Agent.call(this, x, y, color);
 }
 
 Individual.prototype = Object.create(Agent.prototype);
@@ -83,15 +64,22 @@ Individual.prototype.update = function (engine) {
  * @param {integer} greens - The number of green individuals
  * @param {integer} reds - The number of red individuals
  */
-function Engine(width, height, population, iterations) {
+function Schelling(width, height, drawingDiv, population, iterations) {
 	if (typeof width !== 'number' || width <= 0) {
 		throw new Error('width must be a number greater than 0');
 	}
 	if (typeof height !== 'number' || height <= 0) {
 		throw new Error('height must be a number greater than 0');
 	}
+	Engine.call(this, width, height, drawingDiv);
 	if (typeof population !== 'object' || Object.keys(population) < 2) {
 		throw new Error('population must be an array describing at least two populations!');
+	}
+	if ((this.width * this.height) < totalPopulation) {
+		throw new Error('The number of individuals is larger than the amount of space available!');
+	}
+	if (typeof iterations !== 'number' || iterations < 0) {
+		throw new Error('The number of iterations must be a number greater than 0!');
 	}
 	var totalPopulation = 0;
 	for (var pop in population) {
@@ -101,16 +89,11 @@ function Engine(width, height, population, iterations) {
 				!population[pop].hasOwnProperty('preference')) {
 				throw new Error('A population of individuals was not matching the expected format : ' + JSON.stringify(population[i]));
 			}
+			population[pop].size = parseInt(population[pop].size, 10);
 			totalPopulation += population[pop].size;
 		}
 	}
-	if ((this.width * this.height) < totalPopulation) {
-		throw new Error('The number of individuals is larger than the amount of space available!');
-	}
-	if (typeof iterations !== 'number' || iterations < 0) {
-		throw new Error('The number of iterations must be a number greater than 0!');
-	}
-	this.turns++;
+	this.turns = 0;
 	this.iterations = iterations;
 	this.width = width;
 	this.height = height;
@@ -128,23 +111,17 @@ function Engine(width, height, population, iterations) {
 			this.satisfactionSurvey[pop.color] = [];
 		}
 	}
-	
-	this.grid = [];
-	for (var i = 0; i < width; i++) {
-		var column = [];
-		for (var j = 0; j < height; j++) {
-			column.push(null);
-		}
-		this.grid.push(column);
-	}
 	this.place();
 }
+
+Schelling.prototype = Object.create(Engine.prototype);
+Schelling.prototype.constructor = Schelling;
 
 /**
  * Creates the individuals according to the number given in the constructor
  * and places them on the grid.
  */
-Engine.prototype.place = function () {
+Schelling.prototype.place = function () {
 	this.agents = [];
 	for (var p in this.population) {
 		if (this.population.hasOwnProperty(p)) {
@@ -169,7 +146,7 @@ Engine.prototype.place = function () {
 /**
  * Simulates a turn of the simulation by updating every individual once in a random order.
  */
-Engine.prototype.tick = function () {
+Schelling.prototype.tick = function () {
 	this.turns++;
 	this.agents = shuffle(this.agents);
 	var i = this.agents.length - 1;
@@ -194,42 +171,7 @@ Engine.prototype.tick = function () {
 	}
 };
 
-/**
- * Draws a representation of the grid in a HTML <canvas> element.
- * In order to draw the result, the page on which the code is executed
- * must contain a <div> with an id set to 'simulation'.
- */
-Engine.prototype.draw = function () {
-	var land = document.getElementById('surface');
-	if (!land) {
-		var land = document.createElement('canvas');
-		land.width = GLOBAL.cellSize * this.width;
-		land.height = GLOBAL.cellSize * this.height;
-		context = land.getContext('2d');
-		land.id = 'surface';
-		document.getElementById('simulation').appendChild(land);
-	}
-
-	context.fillStyle = '#FFFFFF';
-	context.fillRect(0, 0, land.width, land.height);
-	var lastColor;
-
-	for (var i = 0; i < this.width; i++) {
-		var column = i * GLOBAL.cellSize;
-		for (var j = 0; j < this.height; j++) {
-			if (!this.grid[i][j] || !this.grid[i][j].color) {
-				continue;
-			}
-			if (lastColor !== this.grid[i][j].color) {
-				context.fillStyle = this.grid[i][j].color;
-				lastColor = this.grid[i][j].color;
-			}
-			context.fillRect(column, j * GLOBAL.cellSize, GLOBAL.cellSize, GLOBAL.cellSize);
-		}
-	}
-};
-
-Engine.prototype.plot = function () {
+Schelling.prototype.plot = function () {
 	var series = [];
 	var length = 0;
 	for (var color in this.satisfactionSurvey) {
@@ -272,59 +214,6 @@ Engine.prototype.plot = function () {
     });
 };
 
-/**
- * Returns an object containing the cells surronunding the cell at position (i, j).
- * The cells are classified according to their colour
- * @param {Array[Array]} - Two-dimensional array
- * @param {integer} i - Position in the first dimension
- * @param {integer} j - Position in the second dimension
- * @return {Object} - An object describing of the surroundings of cell (i, j)
- */
-function getSurroundings(grid, i, j) {
-	var surroundings = {
-		'free': []
-	};
-	for (var k = -1; k <= 1; k++) {
-		var x = i + k;
-		if (x < 0) {
-			x = grid.length - 1;
-		} else if (x >= grid.length) {
-			x = 0;
-		}
-		for (var l = -1; l <= 1; l++) {
-			var y = j + l;
-			if (y < 0) {
-				y = grid[0].length - 1;
-			} else if (y >= grid[0].length) {
-				y = 0;
-			}
-			if (i === x && j === y) {
-				continue;
-			}
-			var cell = {'x': x, 'y': y};
-			if (grid[x][y] && grid[x][y].hasOwnProperty('color')) {
-				var color = grid[x][y].color;
-				if(!surroundings.hasOwnProperty(color)) {
-					surroundings[color] = [];
-				}
-				surroundings[color].push(cell);
-			} else {
-				surroundings.free.push(cell);
-			}
-		}
-	}
-	return surroundings;
-}
-
-/**
- * Shuffles an array.
- * @param {Array} o - An array
- * @return The shuffled array
- */
-function shuffle(o) {
-    for(var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
-    return o;
-}
 
 function updateRange() {
 	var id = this.id.split('.')[0] + '.output';
@@ -351,7 +240,7 @@ window.onload = function () {
 			var value = element.value;
 			pop[group][property] = value;
 		}
-		var engine = new Engine(x, y, pop, iterations);
+		var engine = new Schelling(x, y, 'simulation', pop, iterations);
 		var startButton = document.getElementById('startButton');
 		startButton.onclick = function () {
 			if (intervalId) {
