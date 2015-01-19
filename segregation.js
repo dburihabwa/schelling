@@ -48,22 +48,31 @@ Individual.prototype.update = function (engine) {
 	if (!(engine instanceof Engine)) {
 		throw new Error('engine must be of type Engine!');
 	}
+	var satisfaction = 0;
 	var surroundings = getSurroundings(engine.grid, this.x, this.y);
-	var denominator = 8 - surroundings.free.length;
-	if (denominator === 0) {
-		denominator = 1;
+	var individuals = 8 - surroundings.free.length;
+	if (individuals === 0) {
+		satisfaction = 100;
+	} else {
+		var similarIndividuals = 0;
+		if (surroundings[this.color] && surroundings[this.color].length > 0) {
+			similarIndividuals = surroundings[this.color].length;
+		} else {
+			similarIndividuals = 1;
+		}
+		satisfaction = Math.round(similarIndividuals / individuals * 100);
 	}
-	var similarIndividuals = surroundings[this.color] ? surroundings[this.color].length : 0;
-	var agentSatisfaction = similarIndividuals / denominator * 100;
-	if (agentSatisfaction < engine.preference && surroundings.free.length > 0) {
+	if (satisfaction < engine.preference && surroundings.free.length > 0) {
 		var random = Math.floor(Math.random() * surroundings.free.length);
 		var newCoords = surroundings.free[random];
 		engine.grid[newCoords.x][newCoords.y] = this;
 		engine.grid[this.x][this.y] = null; 
 		this.x = newCoords.x;
 		this.y = newCoords.y;
+	} else {
+		'0';
 	}
-	return agentSatisfaction;
+	return satisfaction;
 };
 /**
  * An engine that simulates a loosely interpreted schelling model.
