@@ -29,20 +29,8 @@ Individual.prototype.update = function (engine) {
 	if (!(engine instanceof Engine)) {
 		throw new Error('engine must be of type Engine!');
 	}
-	var satisfaction = 0;
 	var surroundings = getSurroundings(engine.grid, this.x, this.y);
-	var individuals = 8 - surroundings.free.length;
-	if (individuals === 0) {
-		satisfaction = 100;
-	} else {
-		var similarIndividuals = 0;
-		if (surroundings[this.color] && surroundings[this.color].length > 0) {
-			similarIndividuals = surroundings[this.color].length;
-		} else {
-			similarIndividuals = 1;
-		}
-		satisfaction = Math.round(similarIndividuals / individuals * 100);
-	}
+	var satisfaction = this.getSatisfaction(surroundings);
 	if (satisfaction < engine.preferences[this.color] && surroundings.free.length > 0) {
 		var random = Math.floor(Math.random() * surroundings.free.length);
 		var newCoords = surroundings.free[random];
@@ -53,6 +41,23 @@ Individual.prototype.update = function (engine) {
 	}
 	return satisfaction;
 };
+
+Individual.prototype.getSatisfaction = function (surroundings) {
+	var satisfaction = 0;
+	var individuals = 8 - surroundings.free.length;
+	if (individuals === 0) {
+		return 100;
+	}
+	var similarIndividuals = 0;
+	if (surroundings[this.color] && surroundings[this.color].length > 0) {
+		similarIndividuals = surroundings[this.color].length;
+	} else {
+		similarIndividuals = 1;
+	}
+	satisfaction = Math.round(similarIndividuals / individuals * 100);
+	return satisfaction;
+};
+
 /**
  * An engine that simulates a loosely interpreted schelling model.
  * The constructor creates a grid, sets the level of preference,
@@ -98,8 +103,6 @@ function Schelling(width, height, drawingDiv, population, iterations) {
 	this.width = width;
 	this.height = height;
 	this.population = {};
-	this.satisfaction = {};
-	this.satisfactionSurvey = {};
 	this.agents = [];
 	this.preferences = {};
 	for (var p in population) {
@@ -107,10 +110,28 @@ function Schelling(width, height, drawingDiv, population, iterations) {
 			var pop = population[p];
 			this.population[pop.color] = population[p];
 			this.preferences[pop.color] = parseInt(population[p].preference, 10);
-			this.satisfaction[pop.color] = 0;
-			this.satisfactionSurvey[pop.color] = [];
 		}
 	}
+	this.stats = {satisfaction: {}, satisfactionSurvey: {}};
+	var engine = this;
+	this.onUpdate = function (agent) {
+		if (!engine.stats.satisfaction[agent.color]) {
+			engine.stats.satisfaction[agent.color] = 0;
+		}
+		engine.stats.satisfaction[agent.color] += agent.getSatisfaction(getSurroundings(engine.grid, agent.x, agent.y));
+	}
+	this.onCompletion = function () {
+		for (var color in engine.stats.satisfaction) {
+			if (engine.stats.satisfaction.hasOwnProperty(color)) {
+				if (!engine.stats.satisfactionSurvey[color]) {
+					engine.stats.satisfactionSurvey[color] = [];
+				}
+				var averageColorSatisfaction = Math.round(engine.stats.satisfaction[color] /
+					engine.population[color].size);
+				engine.stats.satisfactionSurvey[color].push(averageColorSatisfaction);
+			}
+		}
+	};
 	this.place();
 }
 
@@ -147,26 +168,18 @@ Schelling.prototype.place = function () {
  * Simulates a turn of the simulation by updating every individual once in a random order.
  */
 Schelling.prototype.tick = function () {
+	this.stats.satisfaction = {};
+	Engine.prototype.tick.call(this, this.onUpdate, this.onCompletion);
 	this.turns++;
-	this.agents = shuffle(this.agents);
-	var i = this.agents.length - 1;
-	while (i >= 0) {
-		var agent = this.agents[i];
-		var agentSatisfaction = agent.update(this);
-		this.satisfaction[agent.color] += agentSatisfaction;
-		i--;
-	}
-	for (var color in this.satisfaction) {
-		if (this.satisfaction.hasOwnProperty(color)) {
-			var colorSatisfactionAverage = Math.round(this.satisfaction[color] / this.population[color].size);
-			this.satisfaction[color] = 0;
-			this.satisfactionSurvey[color].push(colorSatisfactionAverage);
-		}
-	}
 	if ((this.turns % this.iterations) === 0) {
 		clearInterval(intervalId);
-		console.log('Out after ' + this.satisfactionSurvey.length + ' turns');
-		console.log('Average satisfaction : ' + this.satisfaction);
+		console.log('Out after ' + this.turns + ' turns');
+		console.log('Average satisfaction : ');
+		for (var color in this.stats.satisfactionSurvey) {
+			if (this.stats.satisfactionSurvey.hasOwnProperty[color]) {
+				console.log('\t' + color + ' : '+ this.stats.satisfactionSurvey[color]);
+			}
+		}
 		this.plot();
 	}
 };
@@ -174,10 +187,10 @@ Schelling.prototype.tick = function () {
 Schelling.prototype.plot = function () {
 	var series = [];
 	var length = 0;
-	for (var color in this.satisfactionSurvey) {
-		if (this.satisfactionSurvey.hasOwnProperty(color)) {
-			length = this.satisfactionSurvey[color].length;
-			series.push({name: color, data: this.satisfactionSurvey[color]});
+	for (var color in this.stats.satisfactionSurvey) {
+		if (this.stats.satisfactionSurvey.hasOwnProperty(color)) {
+			length = this.stats.satisfactionSurvey[color].length;
+			series.push({'name': color, 'data': this.stats.satisfactionSurvey[color], 'color': color});
 		}
 	}
 	var categories = [];
@@ -214,6 +227,8 @@ Schelling.prototype.plot = function () {
     });
 };
 
+function StatEngine() {
+}
 
 function updateRange() {
 	var id = this.id.split('.')[0] + '.output';
@@ -246,6 +261,7 @@ window.onload = function () {
 			if (intervalId) {
 				clearInterval(intervalId);
 			}
+			console.log('start');
 			intervalId = setInterval(function () {
 				engine.draw();
 				engine.tick();

@@ -28,13 +28,29 @@ function Engine(width, height, drawingDiv) {
 			this.grid[i][j] = null;
 		}
 	}
+	this.agents = [];
 }
 
 /**
  * Simulates a turn of the simulation by updating every individual once in a random order.
+ * @param {function} onUpdate - A function that takes an Agent as a parameter is called after each agent has been updated
+ * @param {function} onCompletion - A function that takes no argument and is called when all agents have been updated
  */
-Engine.prototype.tick = function () {
-	throw new Error('Abstract method must be implemented by subtype!');
+Engine.prototype.tick = function (onUpdate, onCompletion) {
+	this.agents = shuffle(this.agents);
+	var i = this.agents.length;
+	while (--i) {
+		if (!this.agents[i]) {
+			continue;
+		}
+		this.agents[i].update(this);
+		if (typeof onUpdate === 'function') {
+			onUpdate(this.agents[i]);
+		}
+	}
+	if (typeof onCompletion === 'function') {
+		onCompletion();
+	}
 };
 
 /**
