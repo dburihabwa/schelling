@@ -1,3 +1,9 @@
+//Context canvas kept global for better performance
+var context;
+var GLOBAL = {
+	//Size of each cell drawn in the canvas
+	cellSize: 5
+};
 /**
  * Abstract agent.
  * @param {integer} x - Position in x dimension
