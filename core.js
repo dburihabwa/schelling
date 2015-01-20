@@ -17,6 +17,12 @@ Agent.prototype.update = function (engine) {
 	throw new Error('Abstract method must be implemented by subtype!');
 };
 
+/**
+ * A simplistic abstract engine for SMA on a grid.
+ * @param {integer} width - Width of the grid
+ * @param {height} width - Height of the grid
+ * @param {sting} drawingDiv - Name of the div where the rendering canvas should be drawn
+ */
 function Engine(width, height, drawingDiv) {
 	this.width = width;
 	this.height = height;
